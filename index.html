@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+
+<style>
+body {
+    font-family: 'Quicksand', sans-serif;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 40px;
+}
+
+/* Grundform */
+.cta-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    font-weight: 700;
+    font-size: 44px;
+    padding: 28px 40px;
+    border-radius: 60px;
+    text-decoration: none;
+    width: 420px; /* <- gleiche feste Breite */
+}
+
+/* 1. Vollfarbe */
+.cta-primary {
+    background-color: #f58060;
+    color: #ffffff;
+}
+
+/* 2. Outline */
+.cta-outline {
+    background-color: #ffffff;
+    color: #f58060;
+    border: 3px solid #f58060;
+}
+
+/* Icon */
+.cta-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 24px;
+    background-color: #f58060; /* exakte Wunschfarbe */
+    color: #ffffff;
+    padding: 26px 60px;
+    border-radius: 100px;
+    font-size: 42px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.cta-text {
+    font-weight: 500;
+}
+
+.cta-number {
+    font-weight: 700; /* Nummer fett */
+    letter-spacing: 1px;
+}
+
+.cta-bar svg {
+    width: 42px;
+    height: 42px;
+    fill: #ffffff;
+}
+
+
+
+</style>
+
+</head>
+<body>
+
+<!-- Telefon Button (voll orange) -->
+<a href="tel:030 2325357-100" class="cta-bar">
+    <span class="cta-text">Kostenlose Beratung</span>
+
+    <svg viewBox="0 0 24 24">
+        <path d="M6.62 10.79a15.054 15.054 0 006.59 6.59l2.2-2.2a1 1 0 011-.24c1.12.37 2.33.57 3.59.57a1 1 0 011 1v3.5a1 1 0 01-1 1C10.07 22 2 13.93 2 4a1 1 0 011-1H6.5a1 1 0 011 1c0 1.26.2 2.47.57 3.59a1 1 0 01-.25 1l-2.2 2.2z"/>
+    </svg>
+
+    <span class="cta-number">030 2325357-100</span>
+</a>
+
+
+
+<!-- Website Button (nur Rand orange) -->
+<a href="https://www.helpcare.de" class="cta-button cta-outline" target="_blank">
+    www.helpcare.de
+</a>
+
+</body>
+</html>

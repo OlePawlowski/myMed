@@ -11,7 +11,7 @@ import Combine
 // ✅ Externes Enum für Tabs („AppTab“ um Namenskonflikt mit SwiftUI.Tab zu vermeiden)
 @available(iOS 26, *)
 enum AppTab: Hashable, CaseIterable {
-    case home, records, appointments, devices, chat
+    case records, appointments, devices, chat
 }
 
 
@@ -26,76 +26,81 @@ private extension Color {
     static let paletteAccent    = Color(red: 220/255, green: 100/255, blue: 80/255)   // dezentes Rot nur für Notfall
 }
 
+// MARK: - Geteilte Dokumente (Akte + Chat)
+@Observable
+final class DocumentsStore {
+    struct DocumentItem: Identifiable {
+        let id: UUID
+        var title: String
+        var subtitle: String
+        var date: Date
+        var typeIcon: String
+        var isFavorite: Bool
+
+        var category: String {
+            switch typeIcon {
+            case "waveform.path.ecg.rectangle": return "Röntgen"
+            case "testtube.2": return "Labor"
+            case "receipt": return "Rechnung"
+            case "document.fill": return "Befund"
+            case "note.text": return "Notiz"
+            case "cross.case.fill": return "Notfalldaten"
+            default: return "Sonstige"
+            }
+        }
+    }
+
+    var documents: [DocumentItem] = {
+        let cal = Calendar.current
+        func daysAgo(_ d: Int) -> Date { cal.date(byAdding: .day, value: -d, to: Date()) ?? Date() }
+        return [
+            DocumentItem(id: UUID(), title: "Röntgenbilder 6-fach", subtitle: "Dr. Bruch, Anton", date: daysAgo(0), typeIcon: "waveform.path.ecg.rectangle", isFavorite: false),
+            DocumentItem(id: UUID(), title: "Ergebnisse Großes Blutbild", subtitle: "Dr. Holler, René", date: daysAgo(0), typeIcon: "testtube.2", isFavorite: true),
+            DocumentItem(id: UUID(), title: "Rechnung Zahnreinigung", subtitle: "Gestern", date: daysAgo(1), typeIcon: "receipt", isFavorite: false),
+            DocumentItem(id: UUID(), title: "MIO Telemedizinisches Monitoring", subtitle: "Musterfrau, Maria", date: daysAgo(3), typeIcon: "document.fill", isFavorite: false),
+            DocumentItem(id: UUID(), title: "Meine Notiz: Symptome", subtitle: "Eigene Notiz", date: daysAgo(10), typeIcon: "note.text", isFavorite: false),
+            DocumentItem(id: UUID(), title: "Notfalldaten aktualisiert", subtitle: "Allergien, Medikamente", date: daysAgo(15), typeIcon: "cross.case.fill", isFavorite: false)
+        ]
+    }()
+}
+
 // MARK: - ContentView
 
 @available(iOS 26, *)
 struct ContentView: View {
-
-    @State private var selectedTab: AppTab = .home
-    @State private var showChatOverlay: Bool = false
-    
+    @State private var selectedTab: AppTab = .records
+    @State private var documentsStore = DocumentsStore()
 
     var body: some View {
-        ZStack {
-            // MARK: - Custom TabView
-            TabView(selection: $selectedTab) {
-
-                Tab(value: AppTab.home) {
-                    NavigationStack { HomeView(selectedTab: $selectedTab, onOpenChat: { showChatOverlay = true }) }
-                } label: {
-                    Label("Home", systemImage: "house")
-                }
-
-                Tab(value: AppTab.records) {
-                    NavigationStack { DokumenteView(selectedTab: $selectedTab) }
-                } label: {
-                    Label("Akte", systemImage: "folder")
-                }
-
-                Tab(value: AppTab.appointments) {
-                    NavigationStack { AppointmentsView() }
-                } label: {
-                    Label("Termine", systemImage: "calendar")
-                }
-
-                Tab(value: AppTab.devices) {
-                    NavigationStack { DevicesView() }
-                } label: {
-                    Label("Geräte", systemImage: "applewatch")
-                }
-
-                // ✅ Chat als Action Button
-                Tab(value: AppTab.chat, role: .search) {
-                    EmptyView() // kein Content direkt
-                } label: {
-                    Label("Chat", systemImage: "bubble.left.and.bubble.right")
-                }
+        TabView(selection: $selectedTab) {
+            Tab(value: AppTab.records) {
+                NavigationStack { DokumenteView(selectedTab: $selectedTab) }
+            } label: {
+                Label("Meine Akte", systemImage: "folder")
+                    .environment(\.symbolVariants, .none)
             }
-            .tint(Color.brandAccent)
-            .tabBarMinimizeBehavior(.onScrollDown)
-            .onChange(of: selectedTab) { oldValue, newValue in
-                // Overlay öffnen und Auswahl zurücksetzen
-                if newValue == .chat {
-                    showChatOverlay = true
-                    selectedTab = oldValue
-                }
+            Tab(value: AppTab.appointments) {
+                NavigationStack { AppointmentsView() }
+            } label: {
+                Label("Termine", systemImage: "calendar")
+                    .environment(\.symbolVariants, .none)
+            }
+            Tab(value: AppTab.devices) {
+                NavigationStack { DevicesView() }
+            } label: {
+                Label("Geräte", systemImage: "waveform.path.ecg")
+                    .environment(\.symbolVariants, .none)
             }
 
-            // MARK: - Chat Overlay
-            if showChatOverlay {
-                AIChatView()
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .padding(8)
-                    .transition(.move(edge: .bottom))
-                    .zIndex(1)
-                    .onTapGesture {
-                        withAnimation(.spring()) {
-                            showChatOverlay = false
-                        }
-                    }
+            Tab(value: AppTab.chat, role: .search) {
+                NavigationStack { AIChatView(documentsStore: documentsStore) }
+            } label: {
+                Label("Frage stellen", systemImage: "message")
+                    .environment(\.symbolVariants, .none)
             }
         }
+        .tint(Color.brandAccent)
+        .tabBarMinimizeBehavior(.onScrollDown)
         .statusBarHidden(false)
     }
 }
@@ -112,294 +117,7 @@ struct ContentView_Previews: PreviewProvider {
 
 
 
-// MARK: - Home
-struct HomeView: View {
-    @Binding var selectedTab: AppTab
-    var onOpenChat: () -> Void
-
-    private static let chatPrompts = [
-        "Wie geht es dir heute?",
-        "Was kann ich für dich tun?",
-        "Fragen zu deinen Befunden?",
-        "Erzähl mir von deinen Symptomen."
-    ]
-
-    @State private var currentPromptIndex = 0
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header: Profilbild + Glocke oben rechts
-                HStack {
-                    Spacer()
-                    HStack(spacing: 16) {
-                        Button(action: { /* Benachrichtigungen */ }) {
-                            Image(systemName: "bell.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(.primary)
-                                .symbolRenderingMode(.hierarchical)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(action: { /* Profil */ }) {
-                            Image("profile-img")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 36, height: 36)
-                                .clipShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
-
-                // Titel: myMed + Hinweis
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("myMed")
-                        .font(.largeTitle).bold()
-                    Text("Deine Gesundheitsdaten an einem Ort.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Grid: links „Meine Akte“, rechts „Neue Datei“ + „My Health“
-                HStack(alignment: .top, spacing: 14) {
-                    // Links: Meine Akte (hervorgehoben)
-                    Button(action: { selectedTab = .records }) {
-                        HomeGridCard(
-                            title: "Meine Akte",
-                            subtitle: "Dokumente & Befunde",
-                            icon: "folder.fill",
-                            style: .primary
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    // Rechts: vertikal gestapelt, gleiche Höhe
-                    VStack(spacing: 14) {
-                        Button(action: { /* Foto scannen / Upload */ }) {
-                            HomeGridCard(
-                                title: "",
-                                subtitle: "Scannen oder hochladen",
-                                icon: "plus.circle.fill",
-                                style: .secondary
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 80)
-
-                        Button(action: { selectedTab = .appointments }) {
-                            HomeCalendarWidget()
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(minHeight: 240)
-
-                // Chat-Frame: interaktive Eingabe mit wechselnden Prompts
-                VStack(spacing: 12) {
-                    Button(action: onOpenChat) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Color.palettePrimary)
-                            Text(HomeView.chatPrompts[currentPromptIndex])
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(Color.palettePrimary)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                        .background(.ultraThinMaterial, in: .capsule)
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .onReceive(Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()) { _ in
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            currentPromptIndex = (currentPromptIndex + 1) % HomeView.chatPrompts.count
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 20)
-        }
-        .background(BackgroundGradient())
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .navigationBar)
-    }
-}
-
-/// Kalender-Widget im Apple-Kalender-Stil (Termine / Medikation)
-private struct HomeCalendarWidget: View {
-    private let calendar = Calendar.current
-    private let weekdaySymbols = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-
-    private var monthYear: String {
-        let df = DateFormatter()
-        df.locale = .current
-        df.dateFormat = "MMMM yyyy"
-        return df.string(from: Date())
-    }
-
-    private var daysInMonth: [Int?] {
-        guard let range = calendar.range(of: .day, in: .month, for: Date()),
-              let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) else { return [] }
-        let firstWeekday = calendar.component(.weekday, from: firstDay)
-        let offset = (firstWeekday + 5) % 7
-        var days: [Int?] = Array(repeating: nil, count: offset)
-        days += range.map { $0 }
-        let remainder = days.count % 7
-        if remainder != 0 {
-            days += Array(repeating: nil, count: 7 - remainder)
-        }
-        return days
-    }
-
-    private func isToday(_ day: Int) -> Bool {
-        calendar.component(.day, from: Date()) == day
-    }
-
-    var body: some View {
-        LiquidGlassCard(contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(monthYear)
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Color.palettePrimary)
-                }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 4) {
-                    ForEach(weekdaySymbols, id: \.self) { symbol in
-                        Text(symbol)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(Array(daysInMonth.enumerated()), id: \.offset) { _, day in
-                        if let d = day {
-                            Text("\(d)")
-                                .font(.system(size: 11, weight: isToday(d) ? .semibold : .regular))
-                                .foregroundStyle(isToday(d) ? .white : .primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
-                                .background(isToday(d) ? Color.palettePrimary : Color.clear)
-                                .clipShape(Circle())
-                        } else {
-                            Text("")
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-    }
-}
-
-/// Karte fürs Home-Grid (Liquid Glass, moderne Optik)
-private struct HomeGridCard: View {
-    enum Style { case primary, secondary }
-    var title: String
-    var subtitle: String
-    var icon: String
-    var style: Style
-    var customImage: String? = nil
-
-    private var isCompact: Bool { style == .secondary && title.isEmpty }
-    var body: some View {
-        LiquidGlassCard(contentPadding: isCompact ? EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16) : EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
-            Group {
-                if style == .primary {
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        VStack(alignment: .leading, spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.palettePrimary.opacity(0.25))
-                                    .frame(width: 52, height: 52)
-                                Image(systemName: icon)
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(Color.palettePrimary)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(title).font(.title3.weight(.semibold))
-                                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    VStack(alignment: .leading, spacing: isCompact ? 8 : 12) {
-                        Group {
-                            if let name = customImage {
-                                Image(name)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: isCompact ? 36 : 42, height: isCompact ? 36 : 42)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            } else {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.palettePrimary.opacity(0.15))
-                                        .frame(width: isCompact ? 36 : 42, height: isCompact ? 36 : 42)
-                                    Image(systemName: icon)
-                                        .font(.system(size: isCompact ? 16 : 18, weight: .semibold))
-                                        .foregroundStyle(Color.palettePrimary)
-                                }
-                            }
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            if !title.isEmpty {
-                                Text(title).font(.subheadline.weight(.semibold))
-                            }
-                            Text(subtitle).font(.caption2).foregroundStyle(.secondary)
-                        }
-                        if !title.isEmpty {
-                            Spacer(minLength: 0)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: title.isEmpty ? 60 : 100)
-                }
-            }
-            .frame(maxHeight: .infinity)
-        }
-        .overlay {
-            if style == .primary {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.palettePrimary.opacity(0.06),
-                                Color.clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .allowsHitTesting(false)
-            }
-        }
-    }
-}
-
-// MARK: - Records (Akte) – direkte Dokumenten-Übersicht, Back-Pfeil → Home
+// MARK: - Records (Akte) – direkte Dokumenten-Übersicht
 struct DokumenteView: View {
     @Binding var selectedTab: AppTab
     // MARK: Model
@@ -538,143 +256,175 @@ struct DokumenteView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                Text("Patientenakte")
+        dokumenteList
+            .listStyle(.insetGrouped)
+            .listSectionSpacing(.custom(8))
+            .contentMargins(.top, 0, for: .scrollContent)
+            .scrollContentBackground(.hidden)
+            .background(BackgroundGradient())
+            .safeAreaInset(edge: .top, spacing: 0) {
+                headerBar
+            }
+            .sheet(isPresented: $showMedicationSheet) { medicationSheet }
+    }
+
+    private var headerBar: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("myMed")
                     .font(.largeTitle).bold()
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-            .listRowBackground(Color.clear)
-
-            // Header with Tiles (3 across)
-            Section {
-                LiquidGlassCard(contentPadding: EdgeInsets(top: 12, leading: 8, bottom: 12, trailing: 8)) {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        // Favoriten
-                        Button {
-                            withAnimation { showFavorites.toggle(); if showFavorites { showEmergency = false } }
-                        } label: {
-                            FeatureTile(title: "Favoriten", subtitle: favoritesSubtitle, systemImage: "star.fill", tint: Color.palettePrimary)
-                        }
-                        .buttonStyle(.plain)
-
-                        // Notfalldaten
-                        Button {
-                            withAnimation { showEmergency.toggle(); if showEmergency { showFavorites = false } }
-                        } label: {
-                            FeatureTile(title: "Notfalldaten", subtitle: emergencySubtitle, systemImage: "cross.case.fill", tint: Color.paletteAccent)
-                        }
-                        .buttonStyle(.plain)
-
-                        // Medikationsplan
-                        Button { showMedicationSheet = true } label: {
-                            FeatureTile(title: "Medikation", subtitle: "Bald verfügbar", systemImage: "pills", tint: Color.paletteQuaternary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                .listRowBackground(Color.white)
-            }
-
-            // Search bar below header tiles
-            Section {
-                LiquidGlassCard(contentPadding: EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Suche nach Dokumenten", text: $search)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                        if !search.isEmpty {
-                            Button {
-                                search = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
-            .listRowBackground(Color.white)
-
-            // Horizontal categories chips above month sections
-            Section {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Category.allCases) { cat in
-                            CategoryChip(title: cat.rawValue, systemImage: cat.icon, tint: cat.tint, isSelected: selectedCategory == cat) {
-                                withAnimation {
-                                    if selectedCategory == cat { selectedCategory = nil } else { selectedCategory = cat }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 6, trailing: 12))
-            .listRowBackground(Color.clear)
-
-            ForEach(sectioned, id: \.title) { section in
-                Section(section.title) {
-                    ForEach(section.items) { doc in
-                        DocumentListRow(doc: doc)
-                            .listRowBackground(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
-                                    )
-                            )
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) { delete(doc) } label: { Label("Löschen", systemImage: "trash") }
-                                Button { toggleFavorite(doc) } label: { Label("Favorit", systemImage: doc.isFavorite ? "star.slash" : "star") }
-                                    .tint(Color.palettePrimary)
-                            }
-                    }
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .listSectionSpacing(.custom(8))
-        .contentMargins(.top, 8, for: .scrollContent)
-        .scrollContentBackground(.hidden)
-        .background(BackgroundGradient())
-        //.searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Suche nach Dokumenten"))
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    selectedTab = .home
-                } label: {
-                    Label("Home", systemImage: "chevron.left")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
+            Spacer()
+            HStack(spacing: 16) {
                 Menu {
                     Button { /* Scanner */ } label: { Label("Scannen", systemImage: "camera.viewfinder") }
                     Button { /* Upload */ } label: { Label("Hochladen", systemImage: "square.and.arrow.up") }
                 } label: {
-                    Image(systemName: "plus.circle.fill").foregroundStyle(Color.brandAccent)
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                Button(action: { /* Benachrichtigungen */ }) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 18, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                Button(action: { /* Einstellungen */ }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18, weight: .medium))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .glassEffect()
+            .clipShape(Capsule())
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+        .background(BackgroundGradient())
+    }
+
+    private var dokumenteList: some View {
+        List {
+            tilesSection
+            searchSection
+            documentSections
+        }
+    }
+
+    private var tilesSection: some View {
+        Section {
+            LiquidGlassCard(contentPadding: EdgeInsets(top: 12, leading: 8, bottom: 12, trailing: 8)) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    Button {
+                        withAnimation { showFavorites.toggle(); if showFavorites { showEmergency = false } }
+                    } label: {
+                        FeatureTile(title: "Favoriten", subtitle: favoritesSubtitle, systemImage: "heart.fill", tint: Color.palettePrimary)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        withAnimation { showEmergency.toggle(); if showEmergency { showFavorites = false } }
+                    } label: {
+                        FeatureTile(title: "Notfalldaten", subtitle: emergencySubtitle, systemImage: "cross.case.fill", tint: Color.paletteAccent)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { showMedicationSheet = true } label: {
+                        FeatureTile(title: "Medikation", subtitle: "Bald verfügbar", systemImage: "pills", tint: Color.paletteQuaternary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .sheet(isPresented: $showMedicationSheet) {
-            VStack(spacing: 16) {
-                Image(systemName: "pills").font(.largeTitle).foregroundStyle(.green)
-                Text("Medikationsplan").font(.title2).bold()
-                Text("Diese Funktion wird bald verfügbar sein.").foregroundStyle(.secondary)
-                Button("Schließen") { showMedicationSheet = false }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.brandAccent)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.white)
+    }
+
+    private var searchSection: some View {
+        Section {
+            LiquidGlassCard(contentPadding: EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Suche nach Dokumenten", text: $search)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                    if !search.isEmpty {
+                        Button {
+                            search = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Menu {
+                        Button {
+                            withAnimation { selectedCategory = nil }
+                        } label: {
+                            Label("Alle", systemImage: selectedCategory == nil ? "checkmark" : "circle")
+                        }
+                        ForEach(Category.allCases) { cat in
+                            Button {
+                                withAnimation { selectedCategory = cat }
+                            } label: {
+                                Label(cat.rawValue, systemImage: selectedCategory == cat ? "checkmark" : cat.icon)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .foregroundStyle(selectedCategory != nil ? Color.palettePrimary : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .padding()
-            .presentationDetents([.medium])
         }
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.white)
+    }
+
+    @ViewBuilder
+    private var documentSections: some View {
+        ForEach(sectioned, id: \.title) { section in
+            Section(section.title) {
+                ForEach(section.items) { doc in
+                    documentRow(doc)
+                }
+            }
+        }
+    }
+
+    private func documentRow(_ doc: Document) -> some View {
+        DocumentListRow(doc: doc)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button(role: .destructive) { delete(doc) } label: { Label("Löschen", systemImage: "trash") }
+                Button { toggleFavorite(doc) } label: { Label("Favorit", systemImage: doc.isFavorite ? "heart.slash" : "heart") }
+                    .tint(Color.palettePrimary)
+            }
+    }
+
+    private var medicationSheet: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "pills").font(.largeTitle).foregroundStyle(.green)
+            Text("Medikationsplan").font(.title2).bold()
+            Text("Diese Funktion wird bald verfügbar sein.").foregroundStyle(.secondary)
+            Button("Schließen") { showMedicationSheet = false }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.brandAccent)
+        }
+        .padding()
+        .presentationDetents([.medium])
     }
 
     // MARK: Actions
@@ -709,7 +459,7 @@ struct DocumentListRow: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(dateShort(doc.date)).font(.caption2).foregroundStyle(.secondary)
                 if doc.isFavorite {
-                    Image(systemName: "star.fill").foregroundStyle(Color.palettePrimary)
+                    Image(systemName: "heart.fill").foregroundStyle(Color.palettePrimary)
                 }
             }
         }
@@ -843,47 +593,507 @@ struct AppointmentsView: View {
     }
 }
 
-// MARK: - AI Chat (KI‑Chat)
+// MARK: - AI Chat (KI‑Chat) – MedGemma lokal, DSGVO-sicher
 struct AIChatView: View {
+    var documentsStore: DocumentsStore
+    var onDismiss: (() -> Void)? = nil
+    @State private var viewModel = ChatViewModel()
     @State private var message: String = ""
-    @State private var messages: [String] = [
-        "Willkommen beim myMed KI‑Chat! Stelle Fragen zu deinen Dokumenten oder Symptomen."
+    @State private var selectedDocument: DocumentsStore.DocumentItem? = nil
+    @State private var showDocumentPicker: Bool = false
+    @State private var showChatHistorySheet: Bool = false
+    @State private var recentChats: [ChatSession] = []
+    @State private var chatHistorySearch: String = ""
+
+    struct ChatSession: Identifiable {
+        let id: UUID
+        var title: String
+        var messages: [ChatMessage]
+    }
+
+    private static let suggestedPrompts: [(title: String, subtitle: String)] = [
+        ("Fragen", "zu deinen Befunden"),
+        ("Erkläre", "meine Laborwerte"),
+        ("Symptome", "beschreiben lassen")
     ]
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(messages.indices, id: \.self) { idx in
-                        LiquidGlassCard {
-                            Text(messages[idx])
+            // MARK: Header (wie Locally AI)
+            chatHeader
+
+            // MARK: Content
+            if viewModel.messages.isEmpty {
+                welcomeContent
+            } else {
+                chatMessages
+            }
+
+            // MARK: Input Bar
+            chatInputBar
+        }
+        .background(ChatBackground())
+        .sheet(isPresented: $showChatHistorySheet) {
+            chatHistorySheet
+        }
+    }
+
+    private var chatHeader: some View {
+        HStack(spacing: 12) {
+            // Links: Doppelstrich (Chat-Historie öffnen) – wie AktenView
+            Button {
+                showChatHistorySheet = true
+            } label: {
+                Image(systemName: "equal")
+                    .font(.system(size: 18, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .frame(height: 46)
+            .padding(.horizontal, 16)
+            .glassEffect()
+            .clipShape(Capsule())
+
+            Spacer()
+
+            // Mitte: Modellname
+            HStack(spacing: 4) {
+                Text("myMed KI")
+                    .font(.headline)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            // Rechts: Schließen (Overlay) oder Einstellungen | Chat Toggle
+            HStack(spacing: 16) {
+                if let dismiss = onDismiss {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Color.clear.frame(width: 44, height: 44)
+                }
+            }
+            .frame(height: 46)
+            .padding(.horizontal, 16)
+            .glassEffect()
+            .clipShape(Capsule())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var chatHistorySheet: some View {
+        let filteredChats = chatHistorySearch.isEmpty
+            ? recentChats
+            : recentChats.filter { $0.title.localizedCaseInsensitiveContains(chatHistorySearch) }
+
+        return NavigationStack {
+            VStack(spacing: 0) {
+                // Suchleiste + Neuer-Chat-Button (wie Referenz)
+                HStack(spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Suchen", text: $chatHistorySearch)
+                            .textInputAutocapitalization(.never)
+                            .disableAutocorrection(true)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    Button {
+                        startNewChat()
+                        showChatHistorySheet = false
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 40, height: 40)
+                    .background(Color(.systemGray6), in: .circle)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                // Liste der letzten Chats
+                List {
+                    ForEach(filteredChats) { chat in
+                        Button {
+                            loadChat(chat)
+                            showChatHistorySheet = false
+                        } label: {
+                            Text(chat.title)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
                         }
                     }
                 }
-                .padding()
+                .listStyle(.plain)
             }
-            HStack {
-                TextField("Nachricht eingeben…", text: $message)
-                    .textFieldStyle(.roundedBorder)
-                Button {
-                    guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                    messages.append(message)
-                    message = ""
-                } label: {
-                    Image(systemName: "paperplane.fill")
-                        .foregroundStyle(Color.brandAccent)
+            .background(Color(.systemBackground))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Schließen") {
+                        showChatHistorySheet = false
+                    }
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial)
         }
-        .background(BackgroundGradient())
-        .navigationTitle("KI‑Chat")
+    }
+
+    private func startNewChat() {
+        if !viewModel.messages.isEmpty {
+            let title = viewModel.messages.first?.text.prefix(50).description ?? "Chat"
+            recentChats.insert(ChatSession(id: UUID(), title: String(title), messages: viewModel.messages), at: 0)
+        }
+        viewModel.messages = []
+    }
+
+    private func loadChat(_ chat: ChatSession) {
+        viewModel.messages = chat.messages
+    }
+
+    private var welcomeContent: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                Spacer(minLength: 20)
+                VStack(spacing: 12) {
+                    Text("Mein Begleiter")
+                        .font(.title.bold())
+                    Text("Stelle Fragen zu deinen Gesundheitsdaten")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+
+                // Vorgeschlagene Aktionen
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(Self.suggestedPrompts.enumerated()), id: \.offset) { _, prompt in
+                            Button {
+                                message = "\(prompt.title) \(prompt.subtitle)"
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(prompt.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(prompt.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(.ultraThinMaterial, in: .capsule)
+                            }
+                            .buttonStyle(.plain)
+                            .frame(width: 140)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.vertical, 8)
+            }
+        }
+    }
+
+    private var chatMessages: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(viewModel.messages) { msg in
+                    chatBubble(for: msg)
+                }
+                if viewModel.isLoading {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if viewModel.streamingText.isEmpty {
+                                ProgressView()
+                                Text("Antwort wird generiert…")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(viewModel.streamingText)
+                                    .font(.body)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemGray6), in: .rect(cornerRadius: 16, style: .continuous))
+                        Spacer(minLength: 40)
+                    }
+                }
+            }
+            .padding()
+        }
+    }
+
+    private func chatBubble(for msg: ChatMessage) -> some View {
+        HStack {
+            if msg.role == .user { Spacer(minLength: 40) }
+            Text(msg.text)
+                .font(.body)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: msg.role == .user ? .trailing : .leading)
+                .background(
+                    msg.role == .user
+                        ? Color.brandAccent.opacity(0.15)
+                        : Color(.systemGray6),
+                    in: .rect(cornerRadius: 16, style: .continuous)
+                )
+            if msg.role == .assistant { Spacer(minLength: 40) }
+        }
+    }
+
+    private var chatInputBar: some View {
+        HStack(spacing: 12) {
+            Button { showDocumentPicker = true } label: {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 18, weight: .medium))
+            }
+            .accessibilityLabel(selectedDocument != nil ? "Dokument ändern" : "Dokument aus Akte anhängen")
+            .buttonStyle(.plain)
+            .frame(width: 40, height: 40)
+            .background(selectedDocument != nil ? Color.brandAccent.opacity(0.2) : Color.clear, in: .circle)
+            .overlay(
+                Circle()
+                    .strokeBorder(selectedDocument != nil ? Color.brandAccent : Color.clear, lineWidth: 2)
+            )
+
+            TextField("Frage stellen…", text: $message)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: .capsule)
+
+            Button {
+                guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                let text = message
+                message = ""
+                viewModel.send(text)
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .frame(width: 40, height: 40)
+            .background(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray.opacity(0.3) : Color.brandAccent, in: .circle)
+            .foregroundStyle(.white)
+            .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+        .sheet(isPresented: $showDocumentPicker) {
+            DocumentPickerSheet(
+                documents: documentsStore.documents,
+                selectedDocument: $selectedDocument
+            )
+        }
     }
 }
 
-// MARK: - Components
+// MARK: - Dokument-Auswahl aus der Akte (skalierbar für viele Dokumente)
+private struct DocumentPickerSheet: View {
+    let documents: [DocumentsStore.DocumentItem]
+    @Binding var selectedDocument: DocumentsStore.DocumentItem?
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var searchText: String = ""
+    @State private var showFavoritesOnly: Bool = false
+    @State private var selectedCategory: String? = nil
+    @State private var sortOrder: SortOrder = .newestFirst
+
+    enum SortOrder: String, CaseIterable {
+        case newestFirst = "Neueste zuerst"
+        case oldestFirst = "Älteste zuerst"
+        case aToZ = "A–Z"
+    }
+
+    private static let filterCategories = ["Röntgen", "Labor", "Rechnung", "Befund", "Notiz", "Notfalldaten", "Sonstige"]
+
+    private var filteredDocuments: [DocumentsStore.DocumentItem] {
+        var result = documents
+        if showFavoritesOnly { result = result.filter { $0.isFavorite } }
+        if let cat = selectedCategory { result = result.filter { $0.category == cat } }
+        if !searchText.isEmpty {
+            let q = searchText.lowercased()
+            result = result.filter {
+                $0.title.lowercased().contains(q) || $0.subtitle.lowercased().contains(q)
+            }
+        }
+        switch sortOrder {
+        case .newestFirst: result.sort { $0.date > $1.date }
+        case .oldestFirst: result.sort { $0.date < $1.date }
+        case .aToZ: result.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
+        }
+        return result
+    }
+
+    private var sectionedDocuments: [(title: String, items: [DocumentsStore.DocumentItem])] {
+        let cal = Calendar.current
+        let now = Date()
+        func sectionTitle(for date: Date) -> String {
+            if cal.isDateInToday(date) { return "Heute" }
+            if cal.isDateInYesterday(date) { return "Gestern" }
+            let days = cal.dateComponents([.day], from: date, to: now).day ?? 0
+            if days <= 7 { return "Diese Woche" }
+            if days <= 30 { return "Letzter Monat" }
+            let df = DateFormatter()
+            df.locale = .current
+            df.setLocalizedDateFormatFromTemplate("MMMM yyyy")
+            return df.string(from: date)
+        }
+        let grouped = Dictionary(grouping: filteredDocuments) { sectionTitle(for: $0.date) }
+        let order = ["Heute", "Gestern", "Diese Woche", "Letzter Monat"]
+        let sortedKeys = grouped.keys.sorted { a, b in
+            let ia = order.firstIndex(of: a) ?? 999
+            let ib = order.firstIndex(of: b) ?? 999
+            if ia != ib { return ia < ib }
+            return a < b
+        }
+        return sortedKeys.map { (title: $0, items: grouped[$0]!.sorted { $0.date > $1.date }) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                searchSection
+
+                if filteredDocuments.isEmpty && (!searchText.isEmpty || showFavoritesOnly || selectedCategory != nil) {
+                    Section {
+                        Text("Keine Dokumente gefunden")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                    }
+                }
+
+                ForEach(sectionedDocuments, id: \.title) { section in
+                    Section(section.title) {
+                        ForEach(section.items) { doc in
+                            Button {
+                                selectedDocument = doc
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: doc.typeIcon)
+                                        .foregroundStyle(Color.palettePrimary)
+                                        .frame(width: 32, alignment: .center)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(doc.title)
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(doc.subtitle)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if doc.isFavorite {
+                                        Image(systemName: "heart.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(Color.brandAccent)
+                                    }
+                                    if selectedDocument?.id == doc.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.brandAccent)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Dokument auswählen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Schließen") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showFavoritesOnly.toggle()
+                    } label: {
+                        Image(systemName: showFavoritesOnly ? "heart.fill" : "heart")
+                            .foregroundStyle(showFavoritesOnly ? Color.brandAccent : .secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var searchSection: some View {
+        Section {
+            LiquidGlassCard(contentPadding: EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Suche nach Dokumenten", text: $searchText)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Menu {
+                        Button {
+                            withAnimation { selectedCategory = nil }
+                        } label: {
+                            Label("Alle", systemImage: selectedCategory == nil ? "checkmark" : "circle")
+                        }
+                        ForEach(Self.filterCategories, id: \.self) { cat in
+                            Button {
+                                withAnimation { selectedCategory = cat }
+                            } label: {
+                                Label(cat, systemImage: selectedCategory == cat ? "checkmark" : "circle")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .foregroundStyle(selectedCategory != nil ? Color.palettePrimary : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.white)
+    }
+
+}
+
+// MARK: - Chat-Hintergrund (wie Locally AI: vertikaler Gradient, unsere Farben)
+private struct ChatBackground: View {
+    var body: some View {
+        LinearGradient(
+            colors: [
+                Color.brandAccent.opacity(0.22),
+                Color.paletteSecondary.opacity(0.08),
+                Color(.systemBackground)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+}
+
+// MARK: - Components (iOS 26 Liquid Glass)
 struct LiquidGlassCard<Content: View>: View {
     var contentPadding: EdgeInsets
     var content: () -> Content
@@ -1004,10 +1214,10 @@ struct TabBarIconButton: View {
     private var accessibilityTitle: Text {
         switch icon {
         case "house", "house.fill": return Text("Home")
-        case "folder", "doc.text.fill": return Text("Akte")
+        case "folder", "doc.text", "doc.text.fill": return Text("Akte")
         case "calendar": return Text("Termine")
-        case "applewatch": return Text("Geräte")
-        case "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill": return Text("Chat")
+        case "applewatch", "waveform.path.ecg": return Text("Geräte")
+        case "message", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill": return Text("Frage stellen")
         default: return Text("Tab")
         }
     }
@@ -1041,7 +1251,13 @@ struct TabBarLabeledItem: View {
     }
 }
 
-#Preview {
+#Preview("Akte") {
+    NavigationStack {
+        DokumenteView(selectedTab: .constant(.records))
+    }
+}
+
+#Preview("App") {
     ContentView()
 }
 

@@ -1,0 +1,13 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# llama.cpp
+llama.cpp/build-apple/
+llama.cpp/build-*/
+*.gguf
+
+# DSGVO: Keine Logs mit Prompts
+*.log
