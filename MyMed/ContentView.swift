@@ -57,7 +57,7 @@ final class DocumentsStore {
             DocumentItem(id: UUID(), title: "Röntgenbilder 6-fach", subtitle: "Dr. Bruch, Anton", date: daysAgo(0), typeIcon: "waveform.path.ecg.rectangle", isFavorite: false),
             DocumentItem(id: UUID(), title: "Ergebnisse Großes Blutbild", subtitle: "Dr. Holler, René", date: daysAgo(0), typeIcon: "testtube.2", isFavorite: true),
             DocumentItem(id: UUID(), title: "Rechnung Zahnreinigung", subtitle: "Gestern", date: daysAgo(1), typeIcon: "receipt", isFavorite: false),
-            DocumentItem(id: UUID(), title: "MIO Telemedizinisches Monitoring", subtitle: "Musterfrau, Maria", date: daysAgo(3), typeIcon: "document.fill", isFavorite: false),
+            DocumentItem(id: UUID(), title: "Telemedizinisches Monitoring", subtitle: "Musterfrau, Maria", date: daysAgo(3), typeIcon: "document.fill", isFavorite: false),
             DocumentItem(id: UUID(), title: "Meine Notiz: Symptome", subtitle: "Eigene Notiz", date: daysAgo(10), typeIcon: "note.text", isFavorite: false),
             DocumentItem(id: UUID(), title: "Notfalldaten aktualisiert", subtitle: "Allergien, Medikamente", date: daysAgo(15), typeIcon: "cross.case.fill", isFavorite: false)
         ]
@@ -88,7 +88,7 @@ struct ContentView: View {
             Tab(value: AppTab.devices) {
                 NavigationStack { DevicesView() }
             } label: {
-                Label("Geräte", systemImage: "waveform.path.ecg")
+                Label("Health", systemImage: "waveform.path.ecg")
                     .environment(\.symbolVariants, .none)
             }
 
@@ -205,7 +205,7 @@ struct DokumenteView: View {
             .init(title: "Röntgenbilder 6-fach", subtitle: "Dr. Bruch, Anton", date: daysAgo(0), type: .xray, isFavorite: false),
             .init(title: "Ergebnisse Großes Blutbild", subtitle: "Dr. Holler, René", date: daysAgo(0), type: .lab, isFavorite: true),
             .init(title: "Rechnung Zahnreinigung", subtitle: "Gestern", date: daysAgo(1), type: .invoice, isFavorite: false),
-            .init(title: "MIO Telemedizinisches Monitoring", subtitle: "Musterfrau, Maria", date: daysAgo(3), type: .report, isFavorite: false),
+            .init(title: "Telemedizinisches Monitoring", subtitle: "Musterfrau, Maria", date: daysAgo(3), type: .report, isFavorite: false),
             .init(title: "Meine Notiz: Symptome", subtitle: "Eigene Notiz", date: daysAgo(10), type: .note, isFavorite: false),
             .init(title: "Notfalldaten aktualisiert", subtitle: "Allergien, Medikamente", date: daysAgo(15), type: .emergency, isFavorite: false)
         ]
@@ -258,7 +258,8 @@ struct DokumenteView: View {
     var body: some View {
         dokumenteList
             .listStyle(.insetGrouped)
-            .listSectionSpacing(.custom(8))
+            .listSectionSpacing(.custom(16))
+            .listRowSpacing(14)
             .contentMargins(.top, 0, for: .scrollContent)
             .scrollContentBackground(.hidden)
             .background(BackgroundGradient())
@@ -269,13 +270,8 @@ struct DokumenteView: View {
     }
 
     private var headerBar: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("myMed")
-                    .font(.largeTitle).bold()
-            }
-            Spacer()
-            HStack(spacing: 16) {
+        ThemedNavigationHeader("myMed") {
+            HStack(spacing: 10) {
                 Menu {
                     Button { /* Scanner */ } label: { Label("Scannen", systemImage: "camera.viewfinder") }
                     Button { /* Upload */ } label: { Label("Hochladen", systemImage: "square.and.arrow.up") }
@@ -300,10 +296,6 @@ struct DokumenteView: View {
             .glassEffect()
             .clipShape(Capsule())
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 4)
-        .padding(.bottom, 12)
-        .background(BackgroundGradient())
     }
 
     private var dokumenteList: some View {
@@ -399,6 +391,7 @@ struct DokumenteView: View {
 
     private func documentRow(_ doc: Document) -> some View {
         DocumentListRow(doc: doc)
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
             .listRowBackground(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(.ultraThinMaterial)
@@ -442,21 +435,21 @@ struct DocumentListRow: View {
     let doc: DokumenteView.Document
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 18) {
             ZStack {
                 Circle().fill(doc.type.color.opacity(0.15))
                 Image(systemName: doc.type.icon).foregroundStyle(doc.type.color)
             }
-            .frame(width: 36, height: 36)
+            .frame(width: 40, height: 40)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(doc.title).font(.subheadline).fontWeight(.semibold)
                 Text(doc.subtitle).font(.caption).foregroundStyle(.secondary)
             }
 
-            Spacer()
+            Spacer(minLength: 12)
 
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 5) {
                 Text(dateShort(doc.date)).font(.caption2).foregroundStyle(.secondary)
                 if doc.isFavorite {
                     Image(systemName: "heart.fill").foregroundStyle(Color.palettePrimary)
@@ -545,51 +538,546 @@ struct FeatureTile: View {
 
 // Removed FilterChip and StatPill structs
 
-// MARK: - Devices (Geräte)
+// MARK: - Devices (Geräte) – HealthKit-Integration
 struct DevicesView: View {
+    @State private var healthManager = HealthManager()
+
     var body: some View {
-        List {
-            Section("Verbundene Geräte") {
-                DeviceRow(name: "Apple Watch", detail: "Series 9", systemImage: "applewatch")
-                DeviceRow(name: "Blutdruckmesser", detail: "Withings", systemImage: "gauge.with.dots.needle.50percent")
-            }
-            Section("Weitere Geräte") {
-                DeviceRow(name: "Waage", detail: "Noch nicht verbunden", systemImage: "scalemass")
-                DeviceRow(name: "Thermometer", detail: "Noch nicht verbunden", systemImage: "thermometer")
+        ScrollView {
+            VStack(spacing: 0) {
+                if !healthManager.isHealthKitAvailable {
+                    simulatorPlaceholder
+                } else if !healthManager.isAuthorized && !healthManager.isDenied {
+                    healthConnectHero
+                } else if healthManager.isDenied {
+                    healthDeniedView
+                } else {
+                    healthInDevelopmentView
+                }
             }
         }
-        .listStyle(.insetGrouped)
-        .tint(Color.brandAccent)
-        .navigationTitle("Geräte")
+        .background(Color(.systemGroupedBackground))
+        .overlay(alignment: .bottom) {
+            if healthManager.isHealthKitAvailable && !healthManager.isAuthorized && !healthManager.isDenied {
+                LinearGradient(
+                    colors: [Color(.systemGroupedBackground), Color.brandAccent.opacity(0.18)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 120)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ThemedNavigationHeader("Health")
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .refreshable { await healthManager.loadAll() }
+        .task {
+            if healthManager.isHealthKitAvailable && healthManager.isAuthorized {
+                await healthManager.loadAll()
+            }
+        }
+    }
+
+    // MARK: - Simulator-Platzhalter
+    private var simulatorPlaceholder: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 60)
+            Image(systemName: "iphone.gen3.slash")
+                .font(.system(size: 56))
+                .foregroundStyle(Color.brandAccent.opacity(0.6))
+            Text("Health nur auf echtem Gerät")
+                .font(.title2.weight(.semibold))
+            Text("Verbinde dein iPhone mit Apple Watch und Health, um deine Geräte und Gesundheitsdaten hier zu sehen.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Spacer().frame(height: 40)
+            // Platzhalter-Geräte für Preview
+            VStack(spacing: 12) {
+                DeviceRow(name: "Apple Watch", detail: "Verbinde Health für echte Daten", systemImage: "applewatch")
+                DeviceRow(name: "iPhone", detail: "Schritte, Aktivität", systemImage: "iphone")
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - Health verbinden (Hero)
+    private var healthConnectHero: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: 48)
+            VStack(spacing: 28) {
+                Image("Icon_-_Apple_Health")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 88, height: 88)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                VStack(spacing: 10) {
+                    Text("Health verbinden")
+                        .font(.title2.weight(.bold))
+                    Text("Zeige Apple Watch, Schritte, Herzfrequenz und Schlaf aus deiner Health App.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                        .padding(.horizontal, 28)
+                }
+                Button {
+                    Task { await healthManager.requestAuthorizationAndLoad() }
+                } label: {
+                    Text("Mit Health verbinden")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.brandAccent)
+                .controlSize(.regular)
+                if healthManager.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.9)
+                }
+            }
+            .padding(28)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 20, style: .continuous))
+            .padding(.horizontal, 24)
+            Spacer().frame(height: 80)
+        }
+    }
+
+    // MARK: - Zugriff verweigert
+    private var healthDeniedView: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 60)
+            Image(systemName: "lock.shield")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("Health-Zugriff verweigert")
+                .font(.title2.weight(.semibold))
+            Text("Öffne Einstellungen → MyMed → Health, um den Zugriff zu erlauben.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            if let msg = healthManager.errorMessage {
+                Text(msg)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal)
+            }
+            Spacer().frame(height: 40)
+        }
+    }
+
+    // MARK: - In Entwicklung (nach Health-Anmeldung)
+    private var healthInDevelopmentView: some View {
+        VStack(spacing: 24) {
+            Spacer().frame(height: 80)
+            Image(systemName: "hammer.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(Color.brandAccent.opacity(0.7))
+            VStack(spacing: 8) {
+                Text("In Entwicklung")
+                    .font(.title2.weight(.bold))
+                Text("Die Geräte-Übersicht wird bald verfügbar sein.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+            Spacer()
+        }
+    }
+
+    // MARK: - Hauptinhalt (verbunden) – vorerst nicht genutzt
+    private var healthContent: some View {
+        VStack(spacing: 24) {
+            // Stat-Karten
+            healthStatsSection
+
+            // Verbundene Geräte aus Health
+            if !healthManager.connectedDevices.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Verbundene Geräte")
+                        .font(.headline)
+                        .padding(.horizontal, 20)
+                    VStack(spacing: 0) {
+                        ForEach(healthManager.connectedDevices) { device in
+                            DeviceRow(
+                                name: device.name,
+                                detail: formatLastSync(device.lastSync),
+                                systemImage: device.icon
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            if device.id != healthManager.connectedDevices.last?.id {
+                                Divider()
+                                    .padding(.leading, 52)
+                            }
+                        }
+                    }
+                    .background(.ultraThinMaterial, in: .rect(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                    .padding(.horizontal, 20)
+                }
+            }
+
+            // Weitere Geräte (Placeholder)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Weitere Geräte")
+                    .font(.headline)
+                    .padding(.horizontal, 20)
+                VStack(spacing: 0) {
+                    DeviceRow(name: "Waage", detail: "Noch nicht verbunden", systemImage: "scalemass")
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    Divider().padding(.leading, 52)
+                    DeviceRow(name: "Thermometer", detail: "Noch nicht verbunden", systemImage: "thermometer")
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                }
+                .background(.ultraThinMaterial, in: .rect(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                .padding(.horizontal, 20)
+            }
+
+            Spacer().frame(height: 32)
+        }
+        .padding(.top, 20)
+    }
+
+    private var healthStatsSection: some View {
+        let s = healthManager.stats
+        let cards: [(String, String, String, Color)] = [
+            ("Schritte heute", formatSteps(s.stepsToday), "figure.walk", Color.palettePrimary),
+            ("Herzfrequenz", s.latestHeartRate.map { "\($0) bpm" } ?? "—", "heart.fill", Color.paletteAccent),
+            ("Schlaf", s.lastNightSleepHours.map { String(format: "%.1f h", $0) } ?? "—", "bed.double.fill", Color.paletteQuaternary),
+            ("Aktivität", formatKcal(s.activeEnergyToday), "flame.fill", Color.paletteSecondary)
+        ]
+        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            ForEach(cards, id: \.0) { title, value, icon, tint in
+                HealthStatCard(title: title, value: value, icon: icon, tint: tint)
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func formatLastSync(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            return "Heute \(f.string(from: date))"
+        } else if cal.isDateInYesterday(date) {
+            return "Gestern"
+        } else {
+            let f = DateFormatter()
+            f.dateStyle = .short
+            return f.string(from: date)
+        }
+    }
+
+    private func formatSteps(_ n: Int) -> String {
+        if n >= 1000 { return String(format: "%.1fK", Double(n) / 1000) }
+        return "\(n)"
+    }
+
+    private func formatKcal(_ n: Double) -> String {
+        if n >= 1000 { return String(format: "%.1fK", n / 1000) }
+        return "\(Int(n)) kcal"
     }
 }
 
-// MARK: - Appointments (Termine)
-struct AppointmentsView: View {
+// MARK: - Health Stat Card
+private struct HealthStatCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let tint: Color
+
     var body: some View {
-        VStack(spacing: 0) {
-            BackgroundGradient()
-                .frame(height: 120)
-                .ignoresSafeArea()
-            List {
-                Section("Bevorstehend") {
-                    AppointmentRow(title: "Dr. Müller – Hausarzt", date: "Mo, 23. Feb · 10:30")
-                }
-                Section("Vorschläge") {
-                    AppointmentRow(title: "Orthopädie", date: "In deiner Nähe")
-                    AppointmentRow(title: "Dermatologie", date: "Freie Termine diese Woche")
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(tint)
+                Spacer()
             }
-            .listStyle(.insetGrouped)
+            Text(value)
+                .font(.title2.weight(.semibold))
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
-        .navigationTitle("Termine")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.ultraThinMaterial, in: .rect(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.2), lineWidth: 1))
+    }
+}
+
+// MARK: - Meine Therapie (Termine + Medikationsplan)
+enum TherapySegment: String, CaseIterable {
+    case kalender = "Kalender"
+    case medikationsplan = "Medikationsplan"
+}
+
+struct TherapyMedication: Identifiable {
+    let id: UUID
+    let name: String
+    let dosage: String
+    let time: String
+    let status: String // "geplant", "eingenommen", "verpasst"
+    let iconColor: Color
+}
+
+struct AppointmentsView: View {
+    @State private var selectedSegment: TherapySegment = .kalender
+    @State private var displayedMonth: Date = Date()
+    @State private var selectedDate: Date = Date()
+    @State private var therapyMedications: [TherapyMedication] = [
+        TherapyMedication(id: UUID(), name: "Simagri Forte 10 MG", dosage: "1 Stück", time: "09:00 Uhr", status: "geplant", iconColor: Color.palettePrimary),
+        TherapyMedication(id: UUID(), name: "Innomab 100 MG", dosage: "1 Tablette", time: "20:00 Uhr", status: "geplant", iconColor: Color.palettePrimary)
+    ]
+
+    private let calendar = Calendar.current
+    private let weekdaySymbols = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+    var body: some View {
+        ScrollView {
+                VStack(spacing: 0) {
+                    Picker("", selection: $selectedSegment) {
+                        ForEach(TherapySegment.allCases, id: \.self) { seg in
+                            Text(seg.rawValue).tag(seg)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
+
+                    if selectedSegment == .kalender {
+                        therapyCalendarSection
+                        therapyDailyScheduleSection
+                    } else {
+                        medicationPlanOverviewSection
+                    }
+                }
+        }
+        .background(BackgroundGradient())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ThemedNavigationHeader("Meine Therapie") {
                 Button { } label: {
                     Label("Buchen", systemImage: "calendar.badge.plus")
                 }
+                .buttonStyle(.plain)
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    // MARK: - Kalender (weißer Hintergrund wie Favoriten/Notfalldaten/Medikation)
+    private var therapyCalendarSection: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Button { displayedMonth = calendar.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.brandAccent)
+                }
+                Spacer()
+                Text(monthYearString(displayedMonth))
+                    .font(.headline)
+                Spacer()
+                Button { displayedMonth = calendar.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.brandAccent)
+                }
+            }
+            .padding(.horizontal, 20)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
+                ForEach(weekdaySymbols, id: \.self) { day in
+                    Text(day)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(daysInMonth(displayedMonth), id: \.self) { date in
+                    if let d = date {
+                        therapyDayCell(date: d)
+                    } else {
+                        Color.clear
+                            .frame(height: 36)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.white, in: .rect(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func therapyDayCell(date: Date) -> some View {
+        let status = dayStatus(for: date)
+        let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
+        let isToday = calendar.isDateInToday(date)
+
+        return Button {
+            selectedDate = date
+        } label: {
+            Text("\(calendar.component(.day, from: date))")
+                .font(.subheadline.weight(isToday ? .bold : .regular))
+                .foregroundStyle(foregroundForDay(status: status, isSelected: isSelected))
+                .frame(width: 36, height: 36)
+                .background(backgroundColorForDay(status: status, isSelected: isSelected), in: .circle)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dayStatus(for date: Date) -> DayStatus {
+        let day = calendar.component(.day, from: date)
+        let month = calendar.component(.month, from: date)
+        let displayMonth = calendar.component(.month, from: displayedMonth)
+        if month != displayMonth { return .otherMonth }
+        if date > Date() { return .future }
+        if day == 5 { return .missed }
+        if day == 8 { return .pending }
+        if [1, 2, 3, 4, 6, 7, 10].contains(day) { return .completed }
+        return .future
+    }
+
+    private enum DayStatus { case completed, missed, pending, future, otherMonth }
+
+    private func backgroundColorForDay(status: DayStatus, isSelected: Bool) -> Color {
+        if isSelected { return Color.brandAccent }
+        switch status {
+        case .completed: return Color.brandAccent.opacity(0.2)
+        case .missed: return Color.paletteAccent.opacity(0.25)
+        case .pending: return Color.paletteSecondary.opacity(0.25)
+        case .future: return Color.gray.opacity(0.15)
+        case .otherMonth: return Color.gray.opacity(0.08)
+        }
+    }
+
+    private func foregroundForDay(status: DayStatus, isSelected: Bool) -> Color {
+        if isSelected { return .white }
+        switch status {
+        case .completed: return Color.brandAccent
+        case .missed: return Color.paletteAccent
+        case .pending: return Color.paletteSecondary
+        case .future, .otherMonth: return .secondary
+        }
+    }
+
+    private func monthYearString(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = .current
+        df.setLocalizedDateFormatFromTemplate("MMMM yyyy")
+        return df.string(from: date)
+    }
+
+    private func daysInMonth(_ month: Date) -> [Date?] {
+        guard let range = calendar.range(of: .day, in: .month, for: month),
+              let first = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) else { return [] }
+        let firstWeekday = (calendar.component(.weekday, from: first) + 5) % 7
+        var days: [Date?] = Array(repeating: nil, count: firstWeekday)
+        for d in range {
+            if let date = calendar.date(byAdding: .day, value: d - 1, to: first) { days.append(date) }
+        }
+        days.append(contentsOf: Array(repeating: nil, count: max(0, 42 - days.count)))
+        return days
+    }
+
+    // MARK: - Tägliche Medikationsübersicht
+    private var therapyDailyScheduleSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(dateString(selectedDate))
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+
+            ForEach(therapyMedications) { med in
+                TherapyMedicationRow(medication: med)
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.bottom, 32)
+    }
+
+    private func dateString(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = .current
+        df.dateFormat = "dd.MM.yyyy"
+        return df.string(from: date)
+    }
+
+    // MARK: - Medikationsplan (Übersicht)
+    private var medicationPlanOverviewSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Deine Medikamente")
+                .font(.headline)
+                .padding(.horizontal, 20)
+            ForEach(therapyMedications) { med in
+                TherapyMedicationRow(medication: med)
+            }
+            .padding(.horizontal, 20)
+            Spacer().frame(height: 32)
+        }
+    }
+}
+
+// MARK: - Therapie Medikationszeile (wie Dokumente in der Patientenakte)
+private struct TherapyMedicationRow: View {
+    let medication: TherapyMedication
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(medication.iconColor.opacity(0.15))
+                Image(systemName: "pills.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(medication.iconColor)
+            }
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(medication.name)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("\(medication.dosage) um \(medication.time) (\(medication.status))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(medication.time)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "square")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -1074,7 +1562,6 @@ private struct DocumentPickerSheet: View {
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
         .listRowBackground(Color.white)
     }
-
 }
 
 // MARK: - Chat-Hintergrund (wie Locally AI: vertikaler Gradient, unsere Farben)
@@ -1182,11 +1669,48 @@ struct AppointmentRow: View {
 
 struct BackgroundGradient: View {
     var body: some View {
-        LinearGradient(colors: [
-            Color.brandAccent.opacity(0.18),
-            Color(.systemBackground)
-        ], startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(
+            stops: [
+                .init(color: Color.brandAccent.opacity(0.15), location: 0),
+                .init(color: Color.brandAccent.opacity(0.06), location: 0.4),
+                .init(color: Color.brandAccent.opacity(0.02), location: 0.7),
+                .init(color: Color(.systemBackground), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .ignoresSafeArea()
+    }
+}
+
+/// Einheitlicher Header wie „myMed“ – gleiche Höhe und Stil für alle Tabs
+struct ThemedNavigationHeader<Trailing: View>: View {
+    let title: String
+    @ViewBuilder let trailing: () -> Trailing
+
+    init(_ title: String, @ViewBuilder trailing: @escaping () -> Trailing) {
+        self.title = title
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        HStack(alignment: .top) {
+            Text(title)
+                .font(.largeTitle)
+                .bold()
+            Spacer()
+            trailing()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+    }
+}
+
+extension ThemedNavigationHeader where Trailing == EmptyView {
+    init(_ title: String) {
+        self.title = title
+        self.trailing = { EmptyView() }
     }
 }
 
@@ -1216,7 +1740,7 @@ struct TabBarIconButton: View {
         case "house", "house.fill": return Text("Home")
         case "folder", "doc.text", "doc.text.fill": return Text("Akte")
         case "calendar": return Text("Termine")
-        case "applewatch", "waveform.path.ecg": return Text("Geräte")
+        case "applewatch", "waveform.path.ecg": return Text("Health")
         case "message", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill": return Text("Frage stellen")
         default: return Text("Tab")
         }
@@ -1250,6 +1774,7 @@ struct TabBarLabeledItem: View {
         .accessibilityLabel(Text(title))
     }
 }
+
 
 #Preview("Akte") {
     NavigationStack {
